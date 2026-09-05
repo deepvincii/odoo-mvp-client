@@ -1,52 +1,44 @@
 "use client";
 
-import { useState } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api-client";
 import { siteConfig } from "@/lib/site-config";
 
-import { loginSchema, type LoginValues } from "../auth-schema";
 import { login } from "../auth-service";
+
+type LoginFormState = {
+  email: string;
+  password: string;
+  rememberMe: boolean;
+};
+
+const initialFormState: LoginFormState = {
+  email: "",
+  password: "",
+  rememberMe: false,
+};
 
 export function LoginForm() {
   const router = useRouter();
+  const [formState, setFormState] = useState(initialFormState);
   const [pending, setPending] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
 
-  const form = useForm<LoginValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      rememberMe: false,
-    },
-  });
-
-  const onSubmit = async (values: LoginValues) => {
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setPending(true);
     setRecoveryMessage(null);
-    form.clearErrors("root");
+    setSubmitError(null);
 
     try {
-      await login({
-        email: values.email,
-        password: values.password,
-        rememberMe: values.rememberMe,
-      });
+      await login(formState);
 
       router.replace(siteConfig.authenticatedHome);
       router.refresh();
@@ -56,108 +48,100 @@ export function LoginForm() {
           ? error.message
           : "Unable to sign in. Please try again.";
 
-      form.setError("root", { message });
+      setSubmitError(message);
     } finally {
       setPending(false);
     }
   };
 
   return (
-    <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit(onSubmit)}
-        noValidate
-        className="flex flex-col gap-4"
-      >
-        <FormField
-          control={form.control}
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+      <div className="grid gap-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
           name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@company.com"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          type="email"
+          autoComplete="email"
+          placeholder="you@company.com"
+          required
+          value={formState.email}
+          onChange={(event) =>
+            setFormState((current) => ({
+              ...current,
+              email: event.target.value,
+            }))
+          }
         />
+      </div>
 
-        <FormField
-          control={form.control}
+      <div className="grid gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="password">Password</Label>
+          <button
+            type="button"
+            className="text-primary text-xs underline-offset-4 hover:underline"
+            onClick={() =>
+              setRecoveryMessage(
+                "Password recovery will be connected when account management is added.",
+              )
+            }
+          >
+            Forgot password?
+          </button>
+        </div>
+        <Input
+          id="password"
           name="password"
-          render={({ field }) => (
-            <FormItem>
-              <div className="flex items-center justify-between gap-2">
-                <FormLabel>Password</FormLabel>
-                <button
-                  type="button"
-                  className="text-primary text-xs underline-offset-4 hover:underline"
-                  onClick={() =>
-                    setRecoveryMessage(
-                      "Password recovery will be connected when account management is added.",
-                    )
-                  }
-                >
-                  Forgot password?
-                </button>
-              </div>
-              <FormControl>
-                <Input
-                  type="password"
-                  autoComplete="current-password"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          type="password"
+          autoComplete="current-password"
+          required
+          value={formState.password}
+          onChange={(event) =>
+            setFormState((current) => ({
+              ...current,
+              password: event.target.value,
+            }))
+          }
         />
+      </div>
 
-        <FormField
-          control={form.control}
-          name="rememberMe"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center gap-2">
-              <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={(checked) => field.onChange(checked === true)}
-                />
-              </FormControl>
-              <FormLabel className="text-sm font-normal">
-                Remember me for 30 days
-              </FormLabel>
-            </FormItem>
-          )}
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="remember-me"
+          checked={formState.rememberMe}
+          onCheckedChange={(checked) =>
+            setFormState((current) => ({
+              ...current,
+              rememberMe: checked === true,
+            }))
+          }
         />
+        <Label htmlFor="remember-me" className="text-sm font-normal">
+          Remember me for 30 days
+        </Label>
+      </div>
 
-        {recoveryMessage ? (
-          <p className="text-muted-foreground text-xs" role="status">
-            {recoveryMessage}
-          </p>
-        ) : null}
+      {recoveryMessage ? (
+        <p className="text-muted-foreground text-xs" role="status">
+          {recoveryMessage}
+        </p>
+      ) : null}
 
-        {form.formState.errors.root?.message ? (
-          <p className="text-destructive text-sm" role="alert">
-            {form.formState.errors.root.message}
-          </p>
-        ) : null}
+      {submitError ? (
+        <p id="login-error" className="text-destructive text-sm" role="alert">
+          {submitError}
+        </p>
+      ) : null}
 
-        <Button
-          type="submit"
-          size="lg"
-          disabled={pending}
-          className="mt-2 w-full"
-        >
-          {pending ? "Signing in..." : "Sign in"}
-        </Button>
-      </form>
-    </Form>
+      <Button
+        type="submit"
+        size="lg"
+        disabled={pending}
+        className="mt-2 w-full"
+      >
+        {pending ? "Signing in..." : "Sign in"}
+      </Button>
+    </form>
   );
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/features/auth/auth-constants";
-import { loginSchema } from "@/features/auth/auth-schema";
 import { getBackendApiEndpoint } from "@/lib/backend-api";
 
 type BackendLoginResponse = {
@@ -12,11 +11,37 @@ type BackendLoginResponse = {
   };
 };
 
+type LoginRequest = {
+  email: string;
+  password: string;
+  rememberMe: boolean;
+};
+
+function parseLoginRequest(value: unknown): LoginRequest | null {
+  if (!value || typeof value !== "object") return null;
+
+  const input = value as Record<string, unknown>;
+  const email = typeof input.email === "string" ? input.email.trim() : "";
+  const password = typeof input.password === "string" ? input.password : "";
+  const rememberMe = input.rememberMe;
+
+  if (
+    !email ||
+    !email.includes("@") ||
+    !password ||
+    typeof rememberMe !== "boolean"
+  ) {
+    return null;
+  }
+
+  return { email, password, rememberMe };
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const parsedInput = loginSchema.safeParse(body);
+  const input = parseLoginRequest(body);
 
-  if (!parsedInput.success) {
+  if (!input) {
     return NextResponse.json(
       { success: false, message: "Enter a valid email and password." },
       { status: 400 },
@@ -31,8 +56,8 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        email: parsedInput.data.email,
-        password: parsedInput.data.password,
+        email: input.email,
+        password: input.password,
       }),
       cache: "no-store",
     });
@@ -60,7 +85,7 @@ export async function POST(request: Request) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      ...(parsedInput.data.rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {}),
+      ...(input.rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {}),
     });
 
     return response;
